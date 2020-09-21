@@ -34,8 +34,10 @@ func handleUnixConn(conn *net.UnixConn, callbackFunc callback) {
 	result, err := callbackFunc(received)
 	if err != nil {
 		log.Log.Error(err)
+		conn.Write([]byte(err.Error()))
 	}
 
 	// Send result to conn
+	log.Log.Debugf("Send result %s back to connection", string(result))
 	conn.Write(result)
 }

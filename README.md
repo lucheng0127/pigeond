@@ -19,6 +19,8 @@ pigeond启动server时定义的callback函数处理完指令后将结
 * tasks package
     封装TaskProxy和tasks，TaskProxy用于根据msg内容
     执行不同的task，并返回处理结果。
+    task执行时需传入rstChan，errChan string，用于接
+    收task执行的result或者error。
 
 ***
 
