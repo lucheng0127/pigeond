@@ -44,8 +44,9 @@ func handleUnixConn(conn *net.UnixConn, callbackFunc callback) {
 		log.Log.Error(err)
 		rsp.exitCode = 1
 		rsp.stderr = err.Error()
+	} else {
+		rsp.stdout = string(result)
 	}
-	rsp.stdout = string(result)
 
 	// Send json response to conn
 	rspJSONByte, err := json.Marshal(&rsp)
