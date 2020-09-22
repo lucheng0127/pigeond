@@ -47,7 +47,7 @@ func TaskProxy(msg []byte) ([]byte, error) {
 		return []byte("Task Auto Ack"), nil
 	}
 
-	// Get rst and error from channel
+	// Block until get result or error from channel
 	select {
 	case errStr := <-errChan:
 		return rst, taskRunError(errStr)

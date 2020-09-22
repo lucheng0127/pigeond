@@ -1,6 +1,7 @@
 package socket
 
 import (
+	"encoding/json"
 	"io"
 	"net"
 
@@ -13,6 +14,12 @@ deal with messages get from socket connection, then it will
 return the result and send it back to socket connection.
 */
 type callback func(receive []byte) ([]byte, error)
+
+type resopnse struct {
+	exitCode int
+	stdout   string
+	stderr   string
+}
 
 func handleUnixConn(conn *net.UnixConn, callbackFunc callback) {
 
@@ -31,13 +38,21 @@ func handleUnixConn(conn *net.UnixConn, callbackFunc callback) {
 	}
 
 	// Send data to callback and get result
+	rsp := resopnse{exitCode: 0}
 	result, err := callbackFunc(received)
 	if err != nil {
 		log.Log.Error(err)
-		conn.Write([]byte(err.Error()))
+		rsp.exitCode = 1
+		rsp.stderr = err.Error()
 	}
+	rsp.stdout = string(result)
 
-	// Send result to conn
-	log.Log.Debugf("Send result %s back to connection", string(result))
-	conn.Write(result)
+	// Send json response to conn
+	rspJSONByte, err := json.Marshal(&rsp)
+	if err != nil {
+		log.Log.Error(serverError("unix", "JSON formate response error", err))
+		conn.Close()
+	}
+	log.Log.Debugf("Send %s back to connection", string(rspJSONByte))
+	conn.Write(rspJSONByte)
 }

@@ -26,3 +26,7 @@ func unsupportCommandError() error {
 func taskRunError(errMsg string) error {
 	return newError(6, "Run task error: "+errMsg)
 }
+
+func scritpTaskError(err error) error {
+	return newError(7, "Script task error: "+err.Error())
+}
