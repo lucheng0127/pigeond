@@ -2,6 +2,7 @@ package socket
 
 import (
 	"encoding/json"
+	"fmt"
 	"io"
 	"net"
 
@@ -55,5 +56,7 @@ func handleUnixConn(conn *net.UnixConn, callbackFunc callback) {
 		conn.Close()
 	}
 	log.Log.Debugf("Send %s back to connection", string(rspJSONByte))
+	fmt.Printf("Result\nexit code: %d\nstdout: %s\nstderr: %s",
+		rsp.exitCode, rsp.stdout, rsp.stderr)
 	conn.Write(rspJSONByte)
 }

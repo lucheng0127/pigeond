@@ -6,8 +6,11 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"io"
+	"io/ioutil"
 	"os"
 	"path"
+	"regexp"
+	"time"
 
 	log "pigeond/log"
 )
@@ -50,7 +53,70 @@ func getFileMD5(file string) (string, error) {
 	return hex.EncodeToString(h.Sum(nil)), nil
 }
 
+// Fix can't move file between different drive
+func uploadFile(sourcePath, destPath string) error {
+
+	inputFile, err := os.Open(sourcePath)
+	if err != nil {
+		return uploadFileError(err.Error())
+	}
+	outputFile, err := os.Create(destPath)
+	if err != nil {
+		return uploadFileError(err.Error())
+	}
+	defer outputFile.Close()
+
+	_, err = io.Copy(outputFile, inputFile)
+	inputFile.Close()
+	if err != nil {
+		return uploadFileError(err.Error())
+	}
+	return nil
+}
+
+func (s *script) addToInventory() error {
+	// Add script into inventory file
+
+	f, err := os.OpenFile(scriptInventoryFile, os.O_APPEND, 0666)
+	if err != nil {
+		return err
+	}
+	var fw io.Writer
+	fw = f
+	csvW := csv.NewWriter(fw)
+	err = csvW.Write([]string{s.Name, s.CreateTime, s.FileMD5, s.FileName})
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func (s *script) removeFromInventory() error {
+
+	// Get script inventory
+	src, err := ioutil.ReadFile(scriptInventoryFile)
+	if err != nil {
+		return err
+	}
+
+	// Find script data and replace it
+	r, err := regexp.Compile("," + s.FileName)
+	if err != nil {
+		return err
+	}
+	dst := r.ReplaceAll(src, []byte(""))
+
+	// Write to file
+	err = ioutil.WriteFile(scriptInventoryFile, dst, 0666)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
 func getInventoryData(file string) ([][]string, error) {
+	// Get script inventory from file
+
 	var lines = [][]string{}
 	f, err := os.OpenFile(scriptInventoryFile, os.O_RDONLY|os.O_CREATE, 0666)
 	if err != nil {
@@ -122,4 +188,44 @@ func listScripts(rstChan, errChan chan string) {
 	}
 
 	rstChan <- string(slByte)
+}
+
+func addScript(rstChan, errChan chan string, name, file string) {
+
+	// Add script tar file into scripts dir
+	_, err := os.Stat(file)
+	if err != nil {
+		errChan <- err.Error()
+	}
+
+	// Check hash
+	fileName := getFileName(name)
+	if _, exist := scriptInventory[fileName]; exist {
+		errChan <- "Script name not unique"
+	}
+	fileMD5, err := getFileMD5(file)
+	if err != nil {
+		errChan <- err.Error()
+	}
+	filePath := path.Join(scriptDir, fileName+".tar")
+	err = uploadFile(file, filePath)
+	if err != nil {
+		errChan <- err.Error()
+	}
+	s := script{
+		Name:       name,
+		CreateTime: time.Now().Format("2006-01-02 15:04:05"),
+		FileMD5:    fileMD5,
+		FileName:   fileName,
+	}
+
+	// Add to script inventory
+	err = s.addToInventory()
+	if err != nil {
+		// Remove file
+		_ = os.Remove(filePath)
+		errChan <- err.Error()
+	}
+	scriptInventory[fileName] = &s
+	rstChan <- "Add script succeed"
 }

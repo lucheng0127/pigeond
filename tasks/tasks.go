@@ -29,7 +29,7 @@ func TaskProxy(msg []byte) ([]byte, error) {
 	command := msgList[1]
 	args := []string{}
 	if len(msgList) > 3 {
-		args = msgList[2 : len(msgList)-2]
+		args = msgList[2 : len(msgList)-1]
 	}
 
 	// Goroutine run task, if auto ack do not wait task finish
@@ -37,7 +37,11 @@ func TaskProxy(msg []byte) ([]byte, error) {
 	case "LIST_SCRIPT":
 		go listScripts(rstChan, errChan)
 	case "ADD_SCRIPT":
-		log.Log.Info("Try to add script with args:", args)
+		log.Log.Debug("Try to add script with args:", args)
+		if len(args) != 2 {
+			return rst, wrongArgsError("usage: ADD_SCRIPT [script name] [script tar file]")
+		}
+		go addScript(rstChan, errChan, args[0], args[1])
 	default:
 		return rst, unsupportCommandError()
 	}

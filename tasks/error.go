@@ -30,3 +30,11 @@ func taskRunError(errMsg string) error {
 func scritpTaskError(err error) error {
 	return newError(7, "Script task error: "+err.Error())
 }
+
+func uploadFileError(errMsg string) error {
+	return newError(8, "Upload file error: "+errMsg)
+}
+
+func wrongArgsError(errMsg string) error {
+	return newError(9, "Argument error: "+errMsg)
+}
