@@ -47,7 +47,7 @@ func TaskProxy(msg []byte) ([]byte, error) {
 	}
 
 	// Auto Ack, don't check task result
-	if autoAck == true {
+	if autoAck {
 		return []byte("Task Auto Ack"), nil
 	}
 

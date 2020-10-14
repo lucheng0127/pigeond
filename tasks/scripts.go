@@ -10,6 +10,7 @@ import (
 	"os"
 	"path"
 	"regexp"
+	"sync"
 	"time"
 
 	log "pigeond/log"
@@ -17,11 +18,12 @@ import (
 
 const pigeondWorkDir = "/var/run/pigeond"
 
-var scriptInventoryFile = path.Join(pigeondWorkDir, "script_inventory.csv")
-var scriptDir = path.Join(pigeondWorkDir, "scripts")
-
-var scriptInventory = make(map[string]*script)
-var inventoryInited = false
+var (
+	scriptInventoryFile = path.Join(pigeondWorkDir, "script_inventory.csv")
+	scriptDir           = path.Join(pigeondWorkDir, "scripts")
+	scriptInventory     = make(map[string]*script)
+	doOnce              sync.Once
+)
 
 type script struct {
 	Name       string `json:"name"`
@@ -77,17 +79,17 @@ func uploadFile(sourcePath, destPath string) error {
 func (s *script) addToInventory() error {
 	// Add script into inventory file
 
-	f, err := os.OpenFile(scriptInventoryFile, os.O_APPEND, 0666)
+	f, err := os.OpenFile(scriptInventoryFile, os.O_WRONLY|os.O_APPEND, 0666)
 	if err != nil {
 		return err
 	}
-	var fw io.Writer
-	fw = f
-	csvW := csv.NewWriter(fw)
+	defer f.Close()
+	csvW := csv.NewWriter(f)
 	err = csvW.Write([]string{s.Name, s.CreateTime, s.FileMD5, s.FileName})
 	if err != nil {
 		return err
 	}
+	csvW.Flush()
 	return nil
 }
 
@@ -122,9 +124,8 @@ func getInventoryData(file string) ([][]string, error) {
 	if err != nil {
 		return lines, err
 	}
-	var fr io.Reader
-	fr = f
-	csvR := csv.NewReader(fr)
+	defer f.Close()
+	csvR := csv.NewReader(f)
 
 	lines, err = csvR.ReadAll()
 	if err != nil {
@@ -134,16 +135,11 @@ func getInventoryData(file string) ([][]string, error) {
 	return lines, nil
 }
 
-func loadInventory(file string) error {
+func loadInventory() {
 
-	if inventoryInited == true {
-		// Only load once
-		return nil
-	}
-
-	lines, err := getInventoryData(file)
+	lines, err := getInventoryData(scriptInventoryFile)
 	if err != nil {
-		return err
+		panic(err)
 	}
 	for _, line := range lines {
 		s := script{}
@@ -154,9 +150,7 @@ func loadInventory(file string) error {
 		scriptInventory[s.FileName] = &s
 	}
 
-	inventoryInited = true
 	log.Log.Debug("Load script inventory finished")
-	return nil
 }
 
 func init() {
@@ -169,11 +163,8 @@ func init() {
 		}
 	}
 
-	// Load script data into script inventory
-	err := loadInventory(scriptInventoryFile)
-	if err != nil {
-		panic(err.Error())
-	}
+	// Load script data into script inventory, only once
+	doOnce.Do(loadInventory)
 }
 
 func listScripts(rstChan, errChan chan string) {
@@ -185,6 +176,7 @@ func listScripts(rstChan, errChan chan string) {
 	slByte, err := json.Marshal(sl)
 	if err != nil {
 		errChan <- err.Error()
+		return
 	}
 
 	rstChan <- string(slByte)
@@ -196,23 +188,27 @@ func addScript(rstChan, errChan chan string, name, file string) {
 	_, err := os.Stat(file)
 	if err != nil {
 		errChan <- err.Error()
+		return
 	}
 
 	// Check hash
 	fileName := getFileName(name)
 	if _, exist := scriptInventory[fileName]; exist {
 		errChan <- "Script name not unique"
+		return
 	}
 	fileMD5, err := getFileMD5(file)
 	if err != nil {
 		errChan <- err.Error()
+		return
 	}
 	filePath := path.Join(scriptDir, fileName+".tar")
 	err = uploadFile(file, filePath)
 	if err != nil {
 		errChan <- err.Error()
+		return
 	}
-	s := script{
+	s := &script{
 		Name:       name,
 		CreateTime: time.Now().Format("2006-01-02 15:04:05"),
 		FileMD5:    fileMD5,
@@ -225,7 +221,8 @@ func addScript(rstChan, errChan chan string, name, file string) {
 		// Remove file
 		_ = os.Remove(filePath)
 		errChan <- err.Error()
+		return
 	}
-	scriptInventory[fileName] = &s
+	scriptInventory[fileName] = s
 	rstChan <- "Add script succeed"
 }

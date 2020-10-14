@@ -20,7 +20,7 @@ func main() {
 	if err := log.ConfLog(*logFile, *debug); err != nil {
 		panic(err)
 	}
-	if *debug == true {
+	if *debug {
 		fmt.Println("Start pigeond server with debug=true, do't use it in production environment.")
 	}
 

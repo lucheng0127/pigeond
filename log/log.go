@@ -23,7 +23,7 @@ func ConfLog(fn string, debug bool) error {
 	})
 	Log.SetOutput(io.MultiWriter(os.Stdout, logFile))
 	Log.SetLevel(log.InfoLevel)
-	if debug == true {
+	if debug {
 		Log.SetLevel(log.DebugLevel)
 	}
 
